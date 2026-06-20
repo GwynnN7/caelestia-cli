@@ -130,6 +130,10 @@ class PackageInstaller(ABC):
         """Build and install the PKGBUILD in `directory`, returning the installed package names."""
 
     @abstractmethod
+    def build_manual_package(self, name: str, repo: str, build_cmds: list[str], post_install: list[str]) -> None:
+        """Build and install the manual package with the given name, repository, and build commands."""
+
+    @abstractmethod
     def installed_version(self, package: str) -> str | None:
         """Return the installed version of `package`, or None if it is not installed."""
 
@@ -158,6 +162,11 @@ class NoopInstaller(PackageInstaller):
     def build_install(self, directory: Path) -> list[str]:
         info(f"Skipping local package build (not on Arch): {directory}")
         return []
+    
+    def build_manual_package(self, name: str, repo: str, build_cmds: list[str], post_install: list[str]) -> None:
+        """Build and install the manual package with the given name, repository, and build commands."""
+        info(f"Skipping manual package build (not on Arch): {name} from {repo}")
+        return
 
     def installed_version(self, package: str) -> str | None:
         return None
@@ -219,6 +228,34 @@ class ArchInstaller(PackageInstaller):
                 warn(f"failed to remove build artifact {artifact}: {e}")
 
         return names
+
+    def build_manual_package(self, name: str, repo: str, build_cmds: list[str], post_install: list[str]) -> None:
+        info(f"Building manual package: {name}")
+
+        build_dir = Path.home() / ".cache" / "caelestia" / "manual_builds" / name
+
+        if build_dir.exists():
+            subprocess.run(["rm", "-rf", str(build_dir)], check=True)
+
+        build_dir.parent.mkdir(parents=True, exist_ok=True)
+
+        _try_run(
+            ["git", "clone", "--depth", "1", repo, str(build_dir)], 
+            f"failed to clone repository for {name}"
+        )
+
+        for cmd in build_cmds:
+            try:
+                subprocess.run(cmd, shell=True, check=True, cwd=build_dir)
+            except subprocess.CalledProcessError as e:
+                raise PackageError(f"Manual build step failed for {name}: {cmd}") from e
+
+        if post_install:
+            for cmd in post_install:
+                try:
+                    subprocess.run(cmd, shell=True, check=True, cwd=build_dir)
+                except subprocess.CalledProcessError as e:
+                    raise PackageError(f"Manual post-command failed for {name}: {cmd}") from e
 
     def _query(self, package: str) -> tuple[str, str] | None:
         """Return the installed (name, version) of `package`, resolving `provides` (e.g. awk -> gawk), or None."""

@@ -12,7 +12,7 @@ from caelestia.utils.dots.legacy import (
     legacy_to_delete,
 )
 from caelestia.utils.dots.manifest import ComponentError, Manifest, ManifestError
-from caelestia.utils.dots.misc import build_local_packages, run_hooks
+from caelestia.utils.dots.misc import build_local_packages, build_manual_packages, run_hooks
 from caelestia.utils.dots.packages import DEFAULT_AUR_HELPER, PackageError, PackageInstaller
 from caelestia.utils.dots.source import DotsSource, SourceError
 from caelestia.utils.dots.state import DotsState
@@ -191,6 +191,13 @@ class Command:
             log("Building local packages...")
             local_packages = build_local_packages(installer, source, local_dirs)
 
+        manual_pkgs = []
+        for name in manifest.enabled_components:
+            manual_pkgs.extend(manifest.components[name].manual_packages)
+            
+        if manual_pkgs:
+            build_manual_packages(installer, manual_pkgs)
+            
         return installer, packages, local_packages
 
     def dereference_legacy(self, legacy_dir: Path | None) -> None:

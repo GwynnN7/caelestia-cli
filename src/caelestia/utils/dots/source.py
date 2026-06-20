@@ -15,7 +15,7 @@ class DotsSource:
 
     def __init__(self) -> None:
         cfg = get_config().get("dots", {})
-        self.url = cfg.get("url", "https://github.com/caelestia-dots/caelestia.git")
+        self.url = cfg.get("url", "https://github.com/GwynnN7/caelestia-dots.git")
         self.branch = cfg.get("branch", "main")
         # Cache git blobs by (ref, relpath); objects are immutable for a given rev
         self._blob_cache: dict[tuple[str, str], bytes] = {}

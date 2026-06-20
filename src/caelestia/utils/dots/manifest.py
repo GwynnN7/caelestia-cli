@@ -12,7 +12,9 @@ from caelestia.utils.io import warn
 _XDG_DEFAULTS = {
     "XDG_CONFIG_HOME": str(Path.home() / ".config"),
     "XDG_DATA_HOME": str(Path.home() / ".local/share"),
+    "XDG_BIN_HOME": str(Path.home() / ".local/bin"),
     "XDG_STATE_HOME": str(Path.home() / ".local/state"),
+    "XDG_CONFIG_SERVICE": str(Path.home() / ".config/systemd/user"),
     "XDG_CACHE_HOME": str(Path.home() / ".cache"),
 }
 _GLOB_MAGIC = re.compile(r"[*?[]")
@@ -33,11 +35,18 @@ def _expand(text: str) -> Path:
     env = {**_XDG_DEFAULTS, **os.environ}
     return Path(Template(text).safe_substitute(env)).expanduser()
 
+@dataclass(frozen=True)
+class ManualPackage:
+    name: str
+    repo: str
+    build_cmds: list[str]
+    post_install: list[str] = field(default_factory=list)
 
 @dataclass(frozen=True)
 class ManifestEntry:
     src: str
     dest: str
+    sudo: bool = False
 
     def expanded_src(self) -> Path:
         return _expand(self.src)
@@ -68,6 +77,7 @@ class ManifestComponent:
     name: str
     default: bool = False
     packages: list[str] = field(default_factory=list)
+    manual_packages: list[ManualPackage] = field(default_factory=list)
     entries: list[ManifestEntry] = field(default_factory=list)
     post_package: list[str] = field(default_factory=list)
     post_install: list[str] = field(default_factory=list)
@@ -194,6 +204,8 @@ class Manifest:
         seen: set[str] = set()
         ordered: list[str] = []
         for pkg in (*self.packages, *(p for c in self._data.enabled_comps for p in self.components[c].packages)):
+            if pkg in ("caelestia-cli", "caelestia-shell"):
+                continue
             if pkg not in seen:
                 seen.add(pkg)
                 ordered.append(pkg)
@@ -215,15 +227,29 @@ def _validate_str_list(value: Any, ctx: str) -> list[str]:
 def _parse_entry(d: Any) -> ManifestEntry:
     if not isinstance(d, dict):
         raise ManifestError("entry: expected a table")
-    return ManifestEntry(src=_require_key(d, "src", "entry"), dest=_require_key(d, "dest", "entry"))
-
+    return ManifestEntry(
+        src=_require_key(d, "src", "entry"),
+        dest=_require_key(d, "dest", "entry"),
+        sudo=bool(d.get("sudo", False))
+    )
 
 def _parse_component(d: dict[str, Any]) -> ManifestComponent:
     name = _require_key(d, "name", "component")
+
+    manual_pkgs = []
+    for mp in d.get("manual_packages", []):
+        manual_pkgs.append(ManualPackage(
+            name=_require_key(mp, "name", "manual_package"),
+            repo=_require_key(mp, "repo", "manual_package"),
+            build_cmds=_validate_str_list(mp.get("build_cmds", []), f"manual_package '{name}' build_cmds"),
+            post_install=_validate_str_list(mp.get("post_install", []), f"manual_package '{name}' post_install")
+        ))
+
     return ManifestComponent(
         name=name,
         default=bool(d.get("default", False)),
         packages=_validate_str_list(d.get("packages", []), f"component '{name}' packages"),
+        manual_packages=manual_pkgs,
         entries=[_parse_entry(e) for e in d.get("entries", [])],
         post_package=_validate_str_list(d.get("post_package", []), f"component '{name}' post_package"),
         post_install=_validate_str_list(d.get("post_install", []), f"component '{name}' post_install"),

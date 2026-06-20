@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field
 from pathlib import Path
-
+import subprocess
 from caelestia.utils.dots.manifest import ManifestEntry
 from caelestia.utils.dots.source import DotsSource, SourceError
 from caelestia.utils.io import warn
@@ -9,12 +9,23 @@ from caelestia.utils.io import warn
 class _Continue(Exception):
     """Signals the deployed-files loop to skip to the next entry."""
 
-
-def _read_local(path: Path) -> bytes | None:
+def _read_local(path: Path, sudo: bool = False) -> bytes | None:
     """Read a local file, returning None if it can't be read (perms, is a dir, etc.)."""
-
     try:
         return path.read_bytes()
+    except PermissionError:
+        if sudo:
+            try:
+                result = subprocess.run(
+                    ["sudo", "cat", str(path)],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.DEVNULL,
+                    check=True
+                )
+                return result.stdout
+            except subprocess.CalledProcessError:
+                return None
+        return None
     except OSError:
         return None
 
@@ -58,16 +69,22 @@ class Changeset:
         untracked: list[Path] = []
         remap: list[tuple[str, Path]] = []
 
-        # Collect all files to deploy (entry sources can be dirs so we recurse into them)
+
         to_deploy: dict[Path, str] = {}
+        sudo_files: set[Path] = set()
+
         for entry in entries:
             src_root = str(entry.expanded_src())
             repo_files = source.files_at(tip, src_root)
             for dest in entry.expanded_dests():
                 for repo_file in repo_files:
-                    to_deploy[dest / Path(repo_file).relative_to(src_root)] = repo_file
-        files_to_deploy = set(to_deploy)
+                    dest_path = dest / Path(repo_file).relative_to(src_root)
+                    to_deploy[dest_path] = repo_file
+                    
+                    if getattr(entry, "sudo", False):
+                        sudo_files.add(dest_path)
 
+        files_to_deploy = set(to_deploy)
         # Already deployed files
         for dest, src in deployed.items():
             dest_path = Path(dest)
@@ -87,7 +104,7 @@ class Changeset:
                         untracked.append(dest_path)
                         continue
 
-                    local = _read_local(dest_path)
+                    local = _read_local(dest_path, sudo=(dest_path in sudo_files))
                     if local is not None and has_base and try_read(applied_rev, src) == local:
                         deletes.append(dest_path)
                     else:
@@ -106,7 +123,7 @@ class Changeset:
                     if has_base and new_src == src and new_src not in changed:
                         continue  # Unchanged upstream
 
-                    dest_content = _read_local(dest_path)
+                    dest_content = _read_local(dest_path, sudo=(dest_path in sudo_files))
                     if dest_content is None:
                         # Unreadable (perms, became a dir, ...); surface upstream as .new, don't clobber
                         conflicts.append((new_src, dest_path))
@@ -135,7 +152,7 @@ class Changeset:
                 # Failed to read the upstream blob; skip rather than abort the whole update
                 warn(f"could not read from source, skipping: {src}")
                 continue
-            if not dest.exists() or new_content == _read_local(dest):
+            if not dest.exists() or new_content == _read_local(dest, sudo=(dest in sudo_files)):
                 # Dest nonexistent or already equal to new content
                 place.append((src, dest))
             else:

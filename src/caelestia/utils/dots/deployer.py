@@ -1,4 +1,5 @@
 import shutil
+import subprocess
 import tempfile
 from pathlib import Path
 
@@ -14,46 +15,57 @@ class Deployer:
     def __init__(self):
         self.deployed_files: dict[str, str] = {}
 
-    def place(self, src: Path, dest: Path) -> None:
+    def place(self, src: Path, dest: Path, sudo: bool = False) -> None:
         """Place a whole entry (file or directory tree), replacing any existing dest."""
 
         if src.is_dir():
-            self.place_dir(src, dest)
+            self.place_dir(src, dest, sudo=sudo)
         else:
-            self.place_file(src, dest)
+            self.place_file(src, dest, sudo=sudo)
 
-    def place_dir(self, src: Path, dest: Path) -> None:
-        """Place a directory tree recursively, overwriting any existing dest files."""
-
+    def place_dir(self, src: Path, dest: Path, sudo: bool = False) -> None:
         if dest.is_symlink() or dest.is_file():
-            self.remove(dest)
+            self.remove(dest, sudo=sudo)
 
-        dest.mkdir(parents=True, exist_ok=True)
+        if sudo:
+            subprocess.run(["sudo", "mkdir", "-p", str(dest)], check=True)
+            
         for path in src.rglob("*"):
             if path.is_file():
-                self.place_file(path, dest / path.relative_to(src))
+                self.place_file(path, dest / path.relative_to(src), sudo=sudo)
             elif path.is_dir():
-                (dest / path.relative_to(src)).mkdir(parents=True, exist_ok=True)
+                target = dest / path.relative_to(src)
+                if sudo:
+                    subprocess.run(["sudo", "mkdir", "-p", str(target)], check=True)
+                else:
+                    target.mkdir(parents=True, exist_ok=True)
 
-    def place_file(self, src: Path, dest: Path, record: bool = True) -> None:
+    def place_file(self, src: Path, dest: Path, record: bool = True, sudo: bool = False) -> None:
         """Atomically place a single file, replacing any existing dest."""
 
         if dest.is_dir() and not dest.is_symlink():
-            self.remove(dest)
+            self.remove(dest, sudo=sudo)
 
-        dest.parent.mkdir(parents=True, exist_ok=True)
-        f = tempfile.NamedTemporaryFile(dir=dest.parent, delete=False)
-        f.close()
-        try:
-            shutil.copyfile(src, f.name)
-            shutil.copymode(src, f.name)
-            Path(f.name).replace(dest)
-        except BaseException:
-            Path(f.name).unlink()
-            raise
+        if sudo:
+            subprocess.run(["sudo", "mkdir", "-p", str(dest.parent)], check=True)
+            subprocess.run(["sudo", "cp", str(src), str(dest)], check=True)
+            
+            # Optional: Ensure root owns the system configs
+            #subprocess.run(["sudo", "chown", "root:root", str(dest)], check=True)
+        else:
+            # Existing standard user deployment
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            f = tempfile.NamedTemporaryFile(dir=dest.parent, delete=False)
+            f.close()
+            try:
+                shutil.copyfile(src, f.name)
+                shutil.copymode(src, f.name)
+                Path(f.name).replace(dest)
+            except BaseException:
+                Path(f.name).unlink()
+                raise
 
         if record:
-            # Keep relative to dots dir
             self.deployed_files[str(dest)] = str(src.relative_to(dots_dir))
 
     def write_new(self, src: Path, dest: Path) -> Path:
@@ -63,8 +75,10 @@ class Deployer:
         self.place_file(src, new_path, record=False)
         return new_path
 
-    def remove(self, path: Path) -> None:
-        if path.is_symlink() or path.is_file():
+    def remove(self, path: Path, sudo: bool = False) -> None:
+        if sudo:
+            subprocess.run(["sudo", "rm", "-rf", str(path)], check=True)
+        elif path.is_symlink() or path.is_file():
             path.unlink()
         elif path.is_dir():
             shutil.rmtree(path)

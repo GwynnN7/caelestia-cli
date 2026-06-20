@@ -21,6 +21,19 @@ def build_local_packages(installer: PackageInstaller, source: DotsSource, paths:
         built[path] = installer.build_install(directory)
     return built
 
+def build_manual_packages(installer: PackageInstaller, packages: list) -> None:
+    """Build and install each manual git package from the manifest."""
+    if not packages:
+        return
+        
+    print()
+    log("Building manual packages...")
+    for pkg in packages:
+        try:
+            installer.build_manual_package(pkg.name, pkg.repo, pkg.build_cmds, pkg.post_install)
+            info(f"Successfully built and installed {pkg.name}")
+        except Exception as e:
+            warn(f"Failed to build manual package {pkg.name}: {e}")
 
 def run_hooks(manifest: Manifest, kind: str) -> None:
     """Run the global + enabled components' hooks of the given kind (e.g. "post_install")."""

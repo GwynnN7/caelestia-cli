@@ -5,7 +5,7 @@ from pathlib import Path
 from caelestia.utils.dots.deployer import Deployer
 from caelestia.utils.dots.diff import Changeset
 from caelestia.utils.dots.manifest import ComponentError, Manifest, ManifestError
-from caelestia.utils.dots.misc import build_local_packages, run_hooks
+from caelestia.utils.dots.misc import build_local_packages, build_manual_packages, run_hooks
 from caelestia.utils.dots.packages import PackageError, PackageInstaller
 from caelestia.utils.dots.source import DotsSource, SourceError
 from caelestia.utils.dots.state import DotsState
@@ -63,6 +63,13 @@ class Command:
             state.save()
             state.local_packages = self.sync_local_packages(installer, source, state.local_packages, desired_local)
             state.save()
+
+            desired_manual = []
+            for name in manifest.enabled_components:
+                desired_manual.extend(manifest.components[name].manual_packages)
+                
+            if desired_manual:
+                build_manual_packages(installer, desired_manual)
         except PackageError as e:
             fatal(e)
 
