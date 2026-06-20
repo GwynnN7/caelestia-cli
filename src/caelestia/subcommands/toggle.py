@@ -61,30 +61,32 @@ class Command:
 
         self.cfg = {
             "communication": {
-                "discord": {
+                "equibop": {
                     "enable": True,
-                    "match": [{"class": "discord"}],
-                    "command": ["discord"],
-                    "move": True,
+                    "match": [{ "class": "equibop" }],
+                    "command": ["equibop"],
+                    "move": True
                 },
-                "whatsapp": {
+                "telegram": {
                     "enable": True,
-                    "match": [{"class": "whatsapp"}],
-                    "move": True,
-                },
+                    "match": [{ "class": "org.telegram.desktop" }],
+                    "command": ["Telegram"],
+                    "move": True
+                }
             },
             "music": {
                 "spotify": {
-                    "enable": True,
-                    "match": [{"class": "Spotify"}, {"initialTitle": "Spotify"}, {"initialTitle": "Spotify Free"}],
+                    "enable": False,
+                    "match": [{ "class": "Spotify" }, { "initialTitle": "Spotify" }, { "initialTitle": "Spotify Free" }],
                     "command": ["spicetify", "watch", "-s"],
-                    "move": True,
+                    "move": True
                 },
-                "feishin": {
+                "tidal-hifi": {
                     "enable": True,
-                    "match": [{"class": "feishin"}],
-                    "move": True,
-                },
+                    "match": [{ "class": "tidal-hifi" }],
+                    "command": ["tidal-hifi"],
+                    "move": True
+                }
             },
             "sysmon": {
                 "btop": {
@@ -92,15 +94,7 @@ class Command:
                     "match": [{"class": "btop", "title": "btop", "workspace": {"name": "special:sysmon"}}],
                     "command": ["foot", "-a", "btop", "-T", "btop", "fish", "-C", "exec btop"],
                 },
-            },
-            "todo": {
-                "todoist": {
-                    "enable": True,
-                    "match": [{"class": "Todoist"}],
-                    "command": ["todoist"],
-                    "move": True,
-                },
-            },
+            }
         }
         try:
             self.cfg = DeepChainMap(get_config()["toggles"], self.cfg)
