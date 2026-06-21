@@ -1,5 +1,3 @@
-# caelestia-cli
-
 pkgname='caelestia-cli'
 pkgver=1.1.0
 pkgrel=1
@@ -13,17 +11,17 @@ optdepends=('caelestia-shell: shell control and screenshot function')
 makedepends=('python-build' 'python-installer' 'python-hatch' 'python-hatch-vcs')
 provides=('caelestia-cli')
 conflicts=('caelestia-cli-git')
-_archive="caelestia-$pkgver"
+
 source=("git+https://github.com/GwynnN7/caelestia-cli.git")
-install=message.install
+sha256sums=('SKIP')
 
 build() {
-    cd "${srcdir}/${_archive}"
+    cd "${srcdir}/caelestia-cli"
     python -m build --wheel --no-isolation
 }
 
 package() {
-    cd "${srcdir}/${_archive}"
+    cd "${srcdir}/caelestia-cli"
     python -m installer --destdir="$pkgdir" dist/*.whl
     install -Dm644 ./completions/caelestia.fish "$pkgdir"/usr/share/fish/vendor_completions.d/caelestia.fish
 }
