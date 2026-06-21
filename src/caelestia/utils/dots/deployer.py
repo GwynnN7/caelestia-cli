@@ -68,11 +68,11 @@ class Deployer:
         if record:
             self.deployed_files[str(dest)] = str(src.relative_to(dots_dir))
 
-    def write_new(self, src: Path, dest: Path) -> Path:
+    def write_new(self, src: Path, dest: Path, sudo: bool = False) -> Path:
         """Write the upstream version alongside dest as <dest>.new and return that path."""
 
         new_path = dest.parent / f"{dest.name}.new"
-        self.place_file(src, new_path, record=False)
+        self.place_file(src, new_path, record=False, sudo=sudo)
         return new_path
 
     def remove(self, path: Path, sudo: bool = False) -> None:

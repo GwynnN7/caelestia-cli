@@ -168,7 +168,7 @@ class Command:
                 continue
 
             for dest in dests:
-                deployer.place(src, Path(dest))
+                deployer.place(src, Path(dest), sudo=entry.sudo)
                 info(f"{entry.src} -> {dest}")
 
         return deployer.deployed_files

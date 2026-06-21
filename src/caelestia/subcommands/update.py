@@ -144,7 +144,7 @@ class Command:
             if not src.exists():
                 warn(f"missing in source, skipping: {repofile}")
                 continue
-            deployer.place_file(src, dest)
+            deployer.place_file(src, dest, sudo=(dest in changeset.sudo_files))
             info(f"{repofile} -> {dest}")
 
         new_files = []
@@ -153,7 +153,7 @@ class Command:
             if not src.exists():
                 warn(f"missing in source, skipping: {repofile}")
                 continue
-            new_path = deployer.write_new(src, dest)
+            new_path = deployer.write_new(src, dest, sudo=(dest in changeset.sudo_files))
             new_files.append(new_path)
             warn(f"{dest} has local changes; upstream version written as {new_path.name}")
 
@@ -163,12 +163,12 @@ class Command:
             if not src.exists():
                 warn(f"missing in source, skipping: {repofile}")
                 continue
-            new_path = deployer.write_new(src, dest)
+            new_path = deployer.write_new(src, dest, sudo=(dest in changeset.sudo_files))
             revived_files.append(new_path)
             warn(f"{dest} was removed but changed upstream; upstream version written as {new_path.name}")
 
         for dest in changeset.deletes:
-            deployer.remove(dest)
+            deployer.remove(dest, sudo=(dest in changeset.sudo_files))
             deployer.prune_empty_dirs(dest, Path.home())
             info(f"Removed {dest}")
 

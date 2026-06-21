@@ -39,6 +39,7 @@ class Changeset:
     deleted_changed: list[tuple[str, Path]] = field(default_factory=list)  # User deleted it, upstream changed -> .new
     untracked: list[Path] = field(default_factory=list)  # Gone + no longer managed; drop from state
     remap: list[tuple[str, Path]] = field(default_factory=list)  # Up to date but source path moved; restate mapping
+    sudo_files: set[Path] = field(default_factory=set)
 
     def is_empty(self) -> bool:
         return not (self.place or self.conflicts or self.deletes or self.stale or self.deleted_changed)
@@ -167,4 +168,5 @@ class Changeset:
             deleted_changed=deleted_changed,
             untracked=untracked,
             remap=remap,
+            sudo_files=sudo_files,
         )
