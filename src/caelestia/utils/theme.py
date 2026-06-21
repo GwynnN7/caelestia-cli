@@ -155,7 +155,7 @@ def apply_discord(scss: str) -> None:
         (Path(tmp_dir) / "_colours.scss").write_text(scss)
         conf = subprocess.check_output(["sass", "-I", tmp_dir, templates_dir / "discord.scss"], text=True)
 
-    for client in "equibop": #, "Vencord", "BetterDiscord", "Equicord", "vesktop", "legcord":
+    for client in ["equibop"]: #"Vencord", "BetterDiscord", "Equicord", "vesktop", "legcord":
         atomic_write(config_dir / client / "themes/caelestia.theme.css", conf)
 
 
