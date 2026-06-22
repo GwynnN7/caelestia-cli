@@ -1,0 +1,94 @@
+// Caelestia Telegram Desktop Theme
+
+// --- Main Window & Backgrounds ---
+windowBg: {{ $surface }};
+windowFg: {{ $onSurface }};
+windowBgOver: {{ $surfaceContainer }};
+windowBgRipple: {{ $surfaceContainerHigh }};
+windowFgOver: {{ $onSurface }};
+windowSubTextFg: {{ $outline }};
+windowSubTextFgOver: {{ $primary }};
+chat_wallpaper: {{ $background }};
+
+// --- Dialogs (Left Sidebar) ---
+dialogsBg: {{ $background }};
+dialogsNameFg: {{ $onSurface }};
+dialogsChatIconFg: {{ $primary }};
+dialogsDateFg: {{ $outline }};
+dialogsTextFg: {{ $outline }};
+dialogsTextFgService: {{ $tertiary }};
+dialogsDraftFg: {{ $error }};
+dialogsVerifiedIconBg: {{ $primary }};
+dialogsVerifiedIconFg: {{ $onPrimary }};
+dialogsBgOver: {{ $surfaceContainer }};
+dialogsNameFgOver: {{ $onSurface }};
+dialogsTextFgOver: {{ $outline }};
+dialogsBgActive: {{ $primary }};
+dialogsNameFgActive: {{ $onPrimary }};
+dialogsTextFgActive: {{ $onPrimary }};
+
+// --- Chat Panel & Input ---
+chat_messagePanelBg: {{ $surface }};
+chat_messagePanelTextFg: {{ $onSurface }};
+chat_messagePanelHintFg: {{ $outline }};
+chat_messagePanelSendIconFg: {{ $primary }};
+chat_messagePanelSendIconFgActive: {{ $primary }};
+
+// --- Incoming Message Bubbles ---
+msgInBg: {{ $surfaceContainerHigh }};
+msgInBgSelected: {{ $surfaceContainerHighest }};
+msgInShadow: transparent;
+historyTextInFg: {{ $onSurface }};
+msgInDateFg: {{ $outline }};
+msgInReplyBarColor: {{ $primary }};
+msgInReplyBarSelColor: {{ $primary }};
+
+// --- Outgoing Message Bubbles ---
+msgOutBg: {{ $primary }};
+msgOutBgSelected: {{ $surfaceContainerHighest }};
+msgOutShadow: transparent;
+historyTextOutFg: {{ $onPrimary }};
+msgOutDateFg: {{ $onPrimary }};
+msgOutServiceFg: {{ $onPrimary }};
+msgOutReplyBarColor: {{ $onPrimary }};
+msgOutReplyBarSelColor: {{ $onPrimary }};
+
+// --- Buttons ---
+activeButtonBg: {{ $primary }};
+activeButtonBgOver: {{ $primary }};
+activeButtonBgRipple: {{ $surfaceContainerHighest }};
+activeButtonFg: {{ $onPrimary }};
+activeButtonFgOver: {{ $onPrimary }};
+
+// --- Popups & Boxes ---
+boxBg: {{ $surface }};
+boxTextFg: {{ $onSurface }};
+boxTitleFg: {{ $onSurface }};
+boxSearchBg: {{ $surfaceContainer }};
+
+// --- Title Bar (Top) ---
+titleBg: {{ $surfaceDim }};
+titleBgActive: {{ $surfaceDim }};
+titleButtonBg: transparent;
+titleButtonFg: {{ $outline }};
+titleButtonBgOver: {{ $surfaceContainer }};
+titleButtonFgOver: {{ $onSurface }};
+titleButtonCloseBgOver: {{ $error }};
+titleButtonCloseFgOver: {{ $onPrimary }};
+
+// --- Side Bar (Chat Folders on the far left) ---
+sideBarBg: {{ $surfaceDim }};
+sideBarBgActive: {{ $surfaceContainerHigh }};
+sideBarBgRipple: {{ $surfaceContainerHighest }};
+sideBarTextFg: {{ $outline }};
+sideBarTextFgActive: {{ $primary }};
+sideBarIconFg: {{ $outline }};
+sideBarIconFgActive: {{ $primary }};
+sideBarBadgeBg: {{ $primary }};
+sideBarBadgeBgMuted: {{ $surfaceContainerHighest }};
+sideBarBadgeFg: {{ $onPrimary }};
+
+// --- Miscellaneous ---
+dividerFg: {{ $outlineVariant }};
+scrollBarBg: {{ $surfaceContainerHighest }};
+scrollBarBgOver: {{ $outline }};

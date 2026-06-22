@@ -5,8 +5,9 @@ import re
 import shutil
 import subprocess
 import tempfile
+import zipfile
 from pathlib import Path
-
+from caelestia.utils.paths import wallpaper_path_path
 from caelestia.utils.colour import get_dynamic_colours
 from caelestia.utils.hypr import is_lua_config
 from caelestia.utils.io import log_exception
@@ -158,6 +159,29 @@ def apply_discord(scss: str) -> None:
     for client in ["equibop"]: #"Vencord", "BetterDiscord", "Equicord", "vesktop", "legcord":
         atomic_write(config_dir / client / "themes/caelestia.theme.css", conf)
 
+@log_exception
+def apply_telegram(colours: dict[str, str], mode: str) -> None:
+    template = gen_replace(colours, templates_dir / "telegram.theme", hash=True)
+
+    theme_path = config_dir / "telegram/caelestia.tdesktop-theme"
+    theme_path.parent.mkdir(parents=True, exist_ok=True)
+
+    current_wallpaper = None
+    try:
+        current_wallpaper = wallpaper_path_path.read_text().strip()
+    except IOError:
+        pass
+
+    with tempfile.NamedTemporaryFile("wb", delete=False) as f:
+        with zipfile.ZipFile(f, "w", zipfile.ZIP_DEFLATED) as zf:
+            zf.writestr("colors.tdesktop-theme", template)
+            
+            if current_wallpaper and Path(current_wallpaper).is_file():
+                zf.write(current_wallpaper, "background.jpg")
+                
+        tmp_name = f.name
+        
+    shutil.move(tmp_name, theme_path)
 
 @log_exception
 def apply_pandora(colours: dict[str, str], mode: str) -> None:
@@ -428,6 +452,8 @@ def apply_colours(colours: dict[str, str], mode: str) -> None:
                 apply_hypr(gen_lua(colours) if is_lua_config() else gen_conf(colours))
             if check("enableDiscord"):
                 apply_discord(gen_scss(colours))
+            if check("enableTelegram"):
+                apply_telegram(colours, mode)
             if check("enableSpicetify"):
                 apply_spicetify(colours, mode)
             if check("enablePandora"):
