@@ -1,6 +1,6 @@
 _pkgname='caelestia-cli'
 pkgname="$_pkgname-git"
-pkgver=2.1.1
+pkgver=1.2.0
 pkgrel=2
 pkgdesc='The main cli for the Caelestia dotfiles'
 arch=('any')
@@ -22,6 +22,7 @@ pkgver() {
 
 build() {
     cd "${srcdir}/${pkgname}"
+    
     python -m build --wheel --no-isolation
 }
 
