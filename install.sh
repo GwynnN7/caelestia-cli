@@ -10,7 +10,7 @@ printf '%s\n' 'Upgrading system and required packages...' >&2
 
 sudo pacman -Syu --needed --noconfirm git base-devel < /dev/tty
 
-mkdir -p "$(dirname "$repo_dir")"
+mkdir -p "$repo_dir"
 
 cd "$repo_dir"
 curl -OL ${repo_url}/${repo_ref}/PKGBUILD
