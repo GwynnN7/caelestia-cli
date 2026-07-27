@@ -229,7 +229,7 @@ class ArchInstaller(PackageInstaller):
 
         # Stop makepkg from resetting sudo
         env = {**os.environ, "PACMAN_AUTH": "sudo"}
-        # -f = force, -s = sync deps, -i = install
+        # -g = git, -s = sync deps, -i = install
         _try_run(
             ["makepkg", "-fsi", *self.flags], f"failed to build local package in {directory}", cwd=directory, env=env
         )

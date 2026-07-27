@@ -1,3 +1,4 @@
+import os
 import shutil
 import textwrap
 from argparse import Namespace
@@ -30,8 +31,6 @@ def _parse_list_arg(value: str | None) -> list[str] | None:
 
 
 def _deref_symlink(link: Path, target: Path) -> None:
-    """Replace symlink `link` with a real copy of `target`'s content."""
-
     bak = link.rename(link.parent / f"{link.name}.bak")
     try:
         if target.is_dir():
@@ -56,16 +55,20 @@ class Command:
 
         self.print_greeting()
         self.create_backup()
-        legacy_dir = detect_legacy_repo()  # Detect legacy repo first cause deploy overwrites legacy syms
+        legacy_dir = detect_legacy_repo()
 
-        source, tip, manifest = self.fetch_manifest()
+        old_state = DotsState.load()
+
+        source, tip, manifest = self.fetch_manifest(old_state)
         try:
-            installer, packages, local_packages = self.install_packages(source, manifest)
+            installer, packages, local_packages = self.install_packages(source, manifest, old_state)
         except PackageError as e:
             fatal(e)
+
         run_hooks(manifest, "post_package")
-        self.dereference_legacy(legacy_dir)  # Copy legacy content into place before deploy overwrites the symlinks
-        deployed = self.deploy_configs(source, manifest)
+        self.dereference_legacy(legacy_dir)
+
+        deployed = self.deploy_configs(source, manifest, old_state)
         run_hooks(manifest, "post_install")
 
         DotsState(
@@ -82,7 +85,7 @@ class Command:
 
     def print_greeting(self) -> None:
         print(
-            "\033[38;2;150;241;241m"  # Caelestia colour
+            "\033[38;2;150;241;241m"
             + textwrap.dedent(
                 r"""
                 ╭─────────────────────────────────────────────────╮
@@ -107,7 +110,7 @@ class Command:
 
     def create_backup(self) -> None:
         if config_dir.exists():
-            if not confirm("Back up the config directory?", default=True):
+            if not confirm("Back up the config directory?", default=False):
                 return
 
             log(f"Creating a backup of {config_dir}...")
@@ -122,7 +125,7 @@ class Command:
             shutil.copytree(config_dir, config_backup_dir, symlinks=True)
             info(f"Created backup at {config_backup_dir}")
 
-    def fetch_manifest(self) -> tuple[DotsSource, str, Manifest]:
+    def fetch_manifest(self, old_state: DotsState | None) -> tuple[DotsSource, str, Manifest]:
         print()
         log("Fetching dots repo...")
         source = DotsSource()
@@ -134,14 +137,23 @@ class Command:
 
         enable = _parse_list_arg(self.args.enable_components)
         disable = _parse_list_arg(self.args.disable_components)
+
         try:
             manifest = source.manifest_at(tip)
 
-            # No flags given, prompt user for non-default components
-            if enable is None and disable is None:
-                optional = [name for name, comp in manifest.components.items() if not comp.default]
-                if optional:
-                    enable = prompt_selection(optional, "Components to enable?")
+            if getattr(self.args, "ask_all", False):
+                all_comps = list(manifest.components.keys())
+                selected = prompt_selection(all_comps, "Components to enable?")
+                enable = selected
+                disable = [comp for comp in all_comps if comp not in selected]
+
+            elif enable is None and disable is None:
+                if old_state and old_state.enabled_components:
+                    enable = old_state.enabled_components
+                else:
+                    optional = [name for name, comp in manifest.components.items() if not comp.default]
+                    if optional:
+                        enable = prompt_selection(optional, "Components to enable?")
 
             manifest.resolve_components(enable=enable, disable=disable)
         except (SourceError, ManifestError, ComponentError) as e:
@@ -152,10 +164,12 @@ class Command:
 
         return source, tip, manifest
 
-    def deploy_configs(self, source: DotsSource, manifest: Manifest) -> dict[str, str]:
+    def deploy_configs(self, source: DotsSource, manifest: Manifest, old_state: DotsState | None) -> dict[str, str]:
         print()
         log("Installing configs...")
         deployer = Deployer()
+
+        # Place currently enabled entries
         for entry in manifest.enabled_entries():
             src = source.working_path(entry.expanded_src())
             if not src.exists():
@@ -171,20 +185,55 @@ class Command:
                 deployer.place(src, Path(dest), sudo=entry.sudo)
                 info(f"{entry.src} -> {dest}")
 
-        return deployer.deployed_files
+        deployed = dict(deployer.deployed_files)
+        if old_state and old_state.deployed_files:
+            for old_dest, old_src in old_state.deployed_files.items():
+                if old_dest not in deployed:
+                    path = Path(old_dest)
+                    if path.exists() or path.is_symlink():
+                        use_sudo = not os.access(path.parent if path.parent.exists() else path, os.W_OK)
+                        try:
+                            deployer.remove(path, sudo=use_sudo)
+                            info(f"Deleted -> {old_dest}")
+                        except Exception as e:
+                            warn(f"Failed to remove orphaned file {old_dest}: {e}")
+
+        return deployed
 
     def install_packages(
-        self, source: DotsSource, manifest: Manifest
+        self, source: DotsSource, manifest: Manifest, old_state: DotsState | None
     ) -> tuple[PackageInstaller, dict[str, str], dict[str, list[str]]]:
         installer = PackageInstaller.get(self.args.aur_helper, self.args.noconfirm)
+
+        if old_state:
+            new_desired_pkgs = set(manifest.enabled_packages())
+            orphaned_pkg_keys = set(old_state.packages.keys()) - new_desired_pkgs
+            pkgs_to_remove = [old_state.packages[key] for key in orphaned_pkg_keys if key in old_state.packages]
+
+            new_local_dirs = set(manifest.enabled_local_packages())
+            orphaned_local_dirs = set(old_state.local_packages.keys()) - new_local_dirs
+            for local_dir in orphaned_local_dirs:
+                pkgs_to_remove.extend(old_state.local_packages[local_dir])
+
+            if pkgs_to_remove:
+                print()
+                log(f"Uninstalling {len(pkgs_to_remove)} removed packages...")
+                try:
+                    installer.remove(pkgs_to_remove)
+                except PackageError as e:
+                    warn(f"Failed to remove some orphaned packages: {e}")
 
         packages = {}
         desired = manifest.enabled_packages()
         if desired:
             print()
             log("Installing packages...")
-            # Record each desired name -> its real installed name so removal later is exact
             packages = dict(zip(desired, installer.install(desired)))
+
+        if old_state and old_state.packages:
+            for pkg, real in old_state.packages.items():
+                if pkg in manifest.all_known_packages() and pkg not in packages:
+                    packages[pkg] = real
 
         local_packages = {}
         local_dirs = manifest.enabled_local_packages()
@@ -196,15 +245,13 @@ class Command:
         manual_pkgs = []
         for name in manifest.enabled_components:
             manual_pkgs.extend(manifest.components[name].manual_packages)
-            
+
         if manual_pkgs:
             build_manual_packages(installer, manual_pkgs)
-            
+
         return installer, packages, local_packages
 
     def dereference_legacy(self, legacy_dir: Path | None) -> None:
-        """Replace legacy symlinks with real copies of their targets."""
-
         symlinks = legacy_symlinks(legacy_dir)
         if not symlinks:
             return
@@ -223,8 +270,6 @@ class Command:
                 warn(f"failed to preserve {path}: {e}")
 
     def deref_backup_syms(self, legacy_dir: Path | None) -> None:
-        """Deref the backup's legacy symlinks before the repo is cleared, so the backup keeps real content."""
-
         if not config_backup_dir.is_dir():
             return
 
@@ -239,8 +284,6 @@ class Command:
                 warn(f"failed to preserve {link} in backup: {e}")
 
     def migrate_legacy(self, installer: PackageInstaller, legacy_dir: Path | None) -> None:
-        """Clean up a previous install.fish setup (repo, symlinks and metapackage)."""
-
         to_delete = legacy_to_delete(legacy_dir)
         meta_installed = installer.is_installed(LEGACY_META_PKG)
         if not to_delete and not meta_installed:
@@ -267,9 +310,3 @@ class Command:
     def print_done(self) -> None:
         print()
         info("All done! Caelestia has been installed.")
-        info("A few things to finish up:")
-        info("  - A reboot is recommended for all changes take effect")
-        info("  - Edit `~/.config/caelestia/hypr-vars.conf` to set default apps, keybinds and much more")
-        info("  - Edit `~/.config/caelestia/hypr-user.conf` to set your monitor layout and other Hyprland configs")
-        info("  - Run `caelestia update` later to pull in the latest changes")
-        info("Enjoy! For support (or to just hang out), join our Discord server: https://discord.gg/BGDCFCmMBk")

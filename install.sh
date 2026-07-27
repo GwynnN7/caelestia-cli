@@ -17,4 +17,8 @@ curl -OL ${repo_url}/${repo_ref}/PKGBUILD
 makepkg -si --noconfirm < /dev/tty
 
 rm -rf "$repo_dir"
-cd ~ && caelestia install < /dev/tty
+if pacman -Q caelestia-shell &>/dev/null; then
+    cd ~ && caelestia update < /dev/tty
+else
+    cd ~ && caelestia install < /dev/tty
+fi

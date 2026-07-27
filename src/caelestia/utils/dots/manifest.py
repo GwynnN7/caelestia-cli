@@ -17,6 +17,7 @@ _XDG_DEFAULTS = {
     "XDG_CONFIG_SERVICE": str(Path.home() / ".config/systemd/user"),
     "XDG_CACHE_HOME": str(Path.home() / ".cache"),
 }
+
 _GLOB_MAGIC = re.compile(r"[*?[]")
 _LOCAL_PREFIX = "local:"
 
@@ -31,9 +32,9 @@ class ComponentError(Exception):
 
 def _expand(text: str) -> Path:
     """Expand $VAR/${VAR} env vars (with XDG defaults) and ~ in a path."""
-
     env = {**_XDG_DEFAULTS, **os.environ}
     return Path(Template(text).safe_substitute(env)).expanduser()
+
 
 @dataclass(frozen=True)
 class ManualPackage:
@@ -41,6 +42,7 @@ class ManualPackage:
     repo: str
     build_cmds: list[str]
     post_install: list[str] = field(default_factory=list)
+
 
 @dataclass(frozen=True)
 class ManifestEntry:
@@ -52,16 +54,10 @@ class ManifestEntry:
         return _expand(self.src)
 
     def expanded_dests(self) -> list[Path]:
-        """The dest path with globs expanded.
-
-        Globs from the start until the segment with the last glob so subdirs are
-        created if they didn't exist previously.
-        """
-
+        """The dest path with globs expanded."""
         expanded = _expand(self.dest)
         if not _GLOB_MAGIC.search(str(expanded)):
             return [expanded]
-
         parts = expanded.parts
         glob_idx = max(i for i, part in enumerate(parts) if _GLOB_MAGIC.search(part))
         pattern = str(Path(*parts[: glob_idx + 1]))
@@ -117,7 +113,6 @@ class Manifest:
         post_package = _validate_str_list(raw.get("post_package", []), "post_package")
         post_install = _validate_str_list(raw.get("post_install", []), "post_install")
         post_update = _validate_str_list(raw.get("post_update", []), "post_update")
-
         packages = _validate_str_list(raw.get("packages", []), "packages")
 
         components = {}
@@ -141,7 +136,6 @@ class Manifest:
         disable: list[str] | None = None,
     ) -> None:
         """Resolves enabled/disabled components. This MUST be called before calling any other method."""
-
         enable_set = set(enable or [])
         disable_set = set(disable or [])
         known = set(self.components)
@@ -160,6 +154,7 @@ class Manifest:
 
         self._data.enabled_comps.clear()
         self._data.disabled_comps.clear()
+
         for name in self.components:
             if name in enabled:
                 self._data.enabled_comps.append(name)
@@ -168,7 +163,6 @@ class Manifest:
 
     def enabled_entries(self) -> list[ManifestEntry]:
         """The entries of every enabled component."""
-
         entries: list[ManifestEntry] = []
         for name in self._data.enabled_comps:
             entries.extend(self.components[name].entries)
@@ -176,7 +170,6 @@ class Manifest:
 
     def enabled_hooks(self, kind: str) -> list[str]:
         """Global + enabled components' hooks of the given kind."""
-
         hooks = list(getattr(self, kind))
         for name in self._data.enabled_comps:
             hooks.extend(getattr(self.components[name], kind))
@@ -187,20 +180,11 @@ class Manifest:
         return [p for p in self._all_packages() if not p.startswith(_LOCAL_PREFIX)]
 
     def enabled_local_packages(self) -> list[str]:
-        """Local PKGBUILD dirs to build.
-
-        Local packages are determined by a local: prefix and are
-        relative dirs instead of package names.
-        """
+        """Local PKGBUILD dirs to build."""
         return [p[len(_LOCAL_PREFIX) :] for p in self._all_packages() if p.startswith(_LOCAL_PREFIX)]
 
     def _all_packages(self) -> list[str]:
-        """The manifest's top-level packages plus enabled components', in manifest order.
-
-        Top-level packages come first, then each enabled component's packages in
-        component order. Only the first occurrence of each package is kept.
-        """
-
+        """The manifest's top-level packages plus enabled components', in manifest order."""
         seen: set[str] = set()
         ordered: list[str] = []
         for pkg in (*self.packages, *(p for c in self._data.enabled_comps for p in self.components[c].packages)):
@@ -208,6 +192,22 @@ class Manifest:
                 seen.add(pkg)
                 ordered.append(pkg)
         return ordered
+
+    def all_known_packages(self) -> set[str]:
+        """All packages defined anywhere in manifest.toml (enabled or disabled)."""
+        pkgs = set(self.packages)
+        for comp in self.components.values():
+            pkgs.update(comp.packages)
+        return pkgs
+
+    def all_known_dests(self) -> set[str]:
+        """All expanded destination paths defined anywhere in manifest.toml."""
+        dests = set()
+        for comp in self.components.values():
+            for entry in comp.entries:
+                for dest in entry.expanded_dests():
+                    dests.add(str(dest))
+        return dests
 
 
 def _require_key(d: dict[str, Any], key: str, ctx: str) -> Any:
@@ -228,21 +228,22 @@ def _parse_entry(d: Any) -> ManifestEntry:
     return ManifestEntry(
         src=_require_key(d, "src", "entry"),
         dest=_require_key(d, "dest", "entry"),
-        sudo=bool(d.get("sudo", False))
+        sudo=bool(d.get("sudo", False)),
     )
+
 
 def _parse_component(d: dict[str, Any]) -> ManifestComponent:
     name = _require_key(d, "name", "component")
-
     manual_pkgs = []
     for mp in d.get("manual_packages", []):
-        manual_pkgs.append(ManualPackage(
-            name=_require_key(mp, "name", "manual_package"),
-            repo=_require_key(mp, "repo", "manual_package"),
-            build_cmds=_validate_str_list(mp.get("build_cmds", []), f"manual_package '{name}' build_cmds"),
-            post_install=_validate_str_list(mp.get("post_install", []), f"manual_package '{name}' post_install")
-        ))
-
+        manual_pkgs.append(
+            ManualPackage(
+                name=_require_key(mp, "name", "manual_package"),
+                repo=_require_key(mp, "repo", "manual_package"),
+                build_cmds=_validate_str_list(mp.get("build_cmds", []), f"manual_package '{name}' build_cmds"),
+                post_install=_validate_str_list(mp.get("post_install", []), f"manual_package '{name}' post_install"),
+            )
+        )
     return ManifestComponent(
         name=name,
         default=bool(d.get("default", False)),

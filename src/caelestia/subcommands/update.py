@@ -91,9 +91,12 @@ class Command:
         try:
             source.ensure()
             tip = source.tip_rev()
-            if tip == applied_rev:
+            
+            if tip == applied_rev and getattr(self.args, "git", False):
                 info("Dots already up to date.")
                 sys.exit(0)
+            elif tip == applied_rev and not getattr(self.args, "git", False):
+                info("Dots are at the latest commit, but forcing update...")
 
             manifest = source.manifest_at(tip)
             if source.has_rev(applied_rev):
@@ -175,14 +178,17 @@ class Command:
         return new_files, revived_files, deployer.deployed_files
 
     def sync_packages(self, installer: PackageInstaller, current: dict[str, str], desired: list[str]) -> dict[str, str]:
-        to_install = [p for p in desired if p not in current]
+        if not getattr(self.args, "git", False):
+            to_install = desired
+        else:
+            to_install = [p for p in desired if p not in current]
+
         to_remove = [p for p in current if p not in desired]
         installed = dict(current)
 
         if to_install:
             print()
-            info(f"Installing new packages: {', '.join(to_install)}")
-            # Record each desired name -> its real installed name so removal later is exact
+            info(f"Installing/Verifying packages: {', '.join(to_install)}")
             installed.update(zip(to_install, installer.install(to_install)))
 
         if to_remove:
@@ -199,8 +205,14 @@ class Command:
     def sync_local_packages(
         self, installer: PackageInstaller, source: DotsSource, current: dict[str, list[str]], desired: list[str]
     ) -> dict[str, list[str]]:
-        to_build = [p for p in desired if p not in current]
-        to_rebuild = self.outdated_local_packages(installer, source, current, desired)
+        
+        if not getattr(self.args, "git", False):
+            to_build = []
+            to_rebuild = desired
+        else:
+            to_build = [p for p in desired if p not in current]
+            to_rebuild = self.outdated_local_packages(installer, source, current, desired)
+            
         to_remove = [p for p in current if p not in desired]
         installed = dict(current)
 
@@ -228,8 +240,7 @@ class Command:
     def outdated_local_packages(
         self, installer: PackageInstaller, source: DotsSource, current: dict[str, list[str]], desired: list[str]
     ) -> list[str]:
-        """Repo paths whose installed packages are older than what the repo would build (skipped when off Arch)."""
-
+        """Repo paths whose installed packages are older than what the repo would build."""
         outdated = []
         for path in desired:
             if path not in current:
