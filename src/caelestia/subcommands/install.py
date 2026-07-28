@@ -71,10 +71,14 @@ class Command:
         deployed = self.deploy_configs(source, manifest, old_state)
         run_hooks(manifest, "post_install")
 
+        final_components = manifest.enabled_components
+        if getattr(self.args, "reinstall", False) and old_state and old_state.enabled_components:
+            final_components = list(set(old_state.enabled_components + manifest.enabled_components))
+
         DotsState(
             aur_helper=getattr(installer, "helper", DEFAULT_AUR_HELPER),
             applied_rev=tip,
-            enabled_components=manifest.enabled_components,
+            enabled_components=final_components,
             packages=packages,
             local_packages=local_packages,
             deployed_files=deployed,
@@ -145,20 +149,28 @@ class Command:
                     all_comps = list(manifest.components.keys())
                     selected = prompt_selection(all_comps, "Components to reinstall?")
                     enable = selected
-                    if old_state and old_state.enabled_components:
-                        enable.extend([c for c in old_state.enabled_components if c not in selected])
-                    disable = []
+                    disable = [comp for comp in all_comps if comp not in selected]
                 elif getattr(self.args, "ask_all", False):
                     all_comps = list(manifest.components.keys())
                     selected = prompt_selection(all_comps, "Components to enable?")
                     enable = selected
                     disable = [comp for comp in all_comps if comp not in selected]
                 elif old_state and old_state.enabled_components:
-                    info(f"Previously enabled components: {', '.join(old_state.enabled_components)}")
                     all_comps = list(manifest.components.keys())
-                    selected = prompt_selection(all_comps, "Modify components? (Select all components you want to keep/add):")
-                    enable = selected
-                    disable = [comp for comp in all_comps if comp not in selected]
+                    previously_enabled = old_state.enabled_components
+
+                    info(f"Previously enabled components: {', '.join(previously_enabled)}")
+
+                    to_remove = prompt_selection(previously_enabled, "Components to REMOVE? (Leave empty to keep all)")
+                    kept_components = [c for c in previously_enabled if c not in to_remove]
+
+                    available_to_add = [c for c in all_comps if c not in kept_components]
+                    to_add = []
+                    if available_to_add:
+                        to_add = prompt_selection(available_to_add, "Components to ADD? (Leave empty to add none)")
+
+                    enable = kept_components + to_add
+                    disable = [comp for comp in all_comps if comp not in enable]
                 else:
                     optional = [name for name, comp in manifest.components.items() if not comp.default]
                     if optional:
@@ -197,6 +209,10 @@ class Command:
         if old_state and old_state.deployed_files:
             for old_dest, old_src in old_state.deployed_files.items():
                 if old_dest not in deployed:
+                    if getattr(self.args, "reinstall", False):
+                        deployed[old_dest] = old_src
+                        continue
+
                     path = Path(old_dest)
                     if path.exists() or path.is_symlink():
                         use_sudo = not os.access(path.parent if path.parent.exists() else path, os.W_OK)
@@ -213,7 +229,7 @@ class Command:
     ) -> tuple[PackageInstaller, dict[str, str], dict[str, list[str]]]:
         installer = PackageInstaller.get(self.args.aur_helper, self.args.noconfirm)
 
-        if old_state:
+        if old_state and not getattr(self.args, "reinstall", False):
             new_desired_pkgs = set(manifest.enabled_packages())
             orphaned_pkg_keys = set(old_state.packages.keys()) - new_desired_pkgs
             pkgs_to_remove = [old_state.packages[key] for key in orphaned_pkg_keys if key in old_state.packages]
@@ -240,7 +256,9 @@ class Command:
 
         if old_state and old_state.packages:
             for pkg, real in old_state.packages.items():
-                if pkg in manifest.all_known_packages() and pkg not in packages:
+                if getattr(self.args, "reinstall", False) and pkg not in packages:
+                    packages[pkg] = real
+                elif pkg in manifest.all_known_packages() and pkg not in packages:
                     packages[pkg] = real
 
         local_packages = {}
@@ -250,10 +268,14 @@ class Command:
             log("Building local packages...")
             local_packages = build_local_packages(installer, source, local_dirs)
 
+        if getattr(self.args, "reinstall", False) and old_state and old_state.local_packages:
+            for local_dir, pkgs in old_state.local_packages.items():
+                if local_dir not in local_packages:
+                    local_packages[local_dir] = pkgs
+
         manual_pkgs = []
         for name in manifest.enabled_components:
             manual_pkgs.extend(manifest.components[name].manual_packages)
-
         if manual_pkgs:
             build_manual_packages(installer, manual_pkgs)
 
