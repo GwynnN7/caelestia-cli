@@ -38,12 +38,30 @@ class Command:
 
         # Apply file changes
         entries = manifest.enabled_entries()
-        try:
-            changeset = Changeset.compute(source, state.applied_rev, tip, entries, state.deployed_files)
-            source.checkout_tip()
-        except SourceError as e:
-            fatal(e)
-        new_files, revived_files, placed = self.deploy_changeset(source, changeset)
+
+        if getattr(self.args, "force_dotfiles", False):
+            print()
+            log("Force re-installing all configs...")
+            deployer = Deployer()
+            for entry in entries:
+                src = source.working_path(entry.expanded_src())
+                if not src.exists():
+                    warn(f"missing in source, skipping: {entry.src}")
+                    continue
+                dests = entry.expanded_dests()
+                for dest in dests:
+                    deployer.place(src, Path(dest), sudo=entry.sudo)
+                    info(f"{entry.src} -> {dest}")
+            changeset = Changeset()
+            new_files, revived_files = [], []
+            placed = deployer.deployed_files
+        else:
+            try:
+                changeset = Changeset.compute(source, state.applied_rev, tip, entries, state.deployed_files)
+                source.checkout_tip()
+            except SourceError as e:
+                fatal(e)
+            new_files, revived_files, placed = self.deploy_changeset(source, changeset)
 
         # Persist file changes immediately so a later failure can't lose track of them
         deployed = dict(state.deployed_files)

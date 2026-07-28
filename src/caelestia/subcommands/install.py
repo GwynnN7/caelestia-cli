@@ -140,16 +140,25 @@ class Command:
 
         try:
             manifest = source.manifest_at(tip)
-
-            if getattr(self.args, "ask_all", False):
-                all_comps = list(manifest.components.keys())
-                selected = prompt_selection(all_comps, "Components to enable?")
-                enable = selected
-                disable = [comp for comp in all_comps if comp not in selected]
-
-            elif enable is None and disable is None:
-                if old_state and old_state.enabled_components:
-                    enable = old_state.enabled_components
+            if enable is None and disable is None:
+                if getattr(self.args, "reinstall", False):
+                    all_comps = list(manifest.components.keys())
+                    selected = prompt_selection(all_comps, "Components to reinstall?")
+                    enable = selected
+                    if old_state and old_state.enabled_components:
+                        enable.extend([c for c in old_state.enabled_components if c not in selected])
+                    disable = []
+                elif getattr(self.args, "ask_all", False):
+                    all_comps = list(manifest.components.keys())
+                    selected = prompt_selection(all_comps, "Components to enable?")
+                    enable = selected
+                    disable = [comp for comp in all_comps if comp not in selected]
+                elif old_state and old_state.enabled_components:
+                    info(f"Previously enabled components: {', '.join(old_state.enabled_components)}")
+                    all_comps = list(manifest.components.keys())
+                    selected = prompt_selection(all_comps, "Modify components? (Select all components you want to keep/add):")
+                    enable = selected
+                    disable = [comp for comp in all_comps if comp not in selected]
                 else:
                     optional = [name for name, comp in manifest.components.items() if not comp.default]
                     if optional:
@@ -161,7 +170,6 @@ class Command:
 
         names = ", ".join(manifest.enabled_components) or "none"
         info(f"Enabled components: {names}")
-
         return source, tip, manifest
 
     def deploy_configs(self, source: DotsSource, manifest: Manifest, old_state: DotsState | None) -> dict[str, str]:

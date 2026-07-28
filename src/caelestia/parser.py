@@ -129,6 +129,7 @@ def parse_args() -> tuple[argparse.ArgumentParser, argparse.Namespace]:
     install_parser.add_argument("--enable-components", metavar="LIST", help="comma-separated list of components to enable")
     install_parser.add_argument("--disable-components", metavar="LIST", help="comma-separated list of components to disable")
     install_parser.add_argument("-a", "--ask-all", action="store_true", help="prompt selection for all components")
+    install_parser.add_argument("-r", "--reinstall", action="store_true", help="reinstall specific packages without uninstalling others")
     install_parser.add_argument("--noconfirm", action="store_true", help="use defaults for all prompts")
     _set_install_epilog(install_parser)
 
@@ -137,6 +138,7 @@ def parse_args() -> tuple[argparse.ArgumentParser, argparse.Namespace]:
     update_parser.set_defaults(cls=update.Command)
     update_parser.add_argument("--aur-helper", choices=AUR_HELPERS, help="the AUR helper to use")
     update_parser.add_argument("-g", "--git", action="store_true", help="only update if the git commit has changed")
+    update_parser.add_argument("-f", "--force-dotfiles", action="store_true", help="re-install all dotfiles regardless of changes")
     update_parser.add_argument("--noconfirm", action="store_true", help="use defaults for all prompts")
 
     return parser, parser.parse_args()
