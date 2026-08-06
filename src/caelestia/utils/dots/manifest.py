@@ -37,14 +37,6 @@ def _expand(text: str) -> Path:
 
 
 @dataclass(frozen=True)
-class ManualPackage:
-    name: str
-    repo: str
-    build_cmds: list[str]
-    post_install: list[str] = field(default_factory=list)
-
-
-@dataclass(frozen=True)
 class ManifestEntry:
     src: str
     dest: str
@@ -73,7 +65,6 @@ class ManifestComponent:
     name: str
     default: bool = False
     packages: list[str] = field(default_factory=list)
-    manual_packages: list[ManualPackage] = field(default_factory=list)
     entries: list[ManifestEntry] = field(default_factory=list)
     post_package: list[str] = field(default_factory=list)
     post_install: list[str] = field(default_factory=list)
@@ -168,10 +159,18 @@ class Manifest:
             entries.extend(self.components[name].entries)
         return entries
 
-    def enabled_hooks(self, kind: str) -> list[str]:
-        """Global + enabled components' hooks of the given kind."""
+    def enabled_hooks(self, kind: str, components: list[str] | None = None) -> list[str]:
+        """Global + enabled components' hooks of the given kind.
+
+        `components` restricts the run to a subset of the enabled components; the
+        global hooks of that kind are always included.
+        """
+        names = self._data.enabled_comps
+        if components is not None:
+            names = [name for name in names if name in components]
+
         hooks = list(getattr(self, kind))
-        for name in self._data.enabled_comps:
+        for name in names:
             hooks.extend(getattr(self.components[name], kind))
         return hooks
 
@@ -234,21 +233,10 @@ def _parse_entry(d: Any) -> ManifestEntry:
 
 def _parse_component(d: dict[str, Any]) -> ManifestComponent:
     name = _require_key(d, "name", "component")
-    manual_pkgs = []
-    for mp in d.get("manual_packages", []):
-        manual_pkgs.append(
-            ManualPackage(
-                name=_require_key(mp, "name", "manual_package"),
-                repo=_require_key(mp, "repo", "manual_package"),
-                build_cmds=_validate_str_list(mp.get("build_cmds", []), f"manual_package '{name}' build_cmds"),
-                post_install=_validate_str_list(mp.get("post_install", []), f"manual_package '{name}' post_install"),
-            )
-        )
     return ManifestComponent(
         name=name,
         default=bool(d.get("default", False)),
         packages=_validate_str_list(d.get("packages", []), f"component '{name}' packages"),
-        manual_packages=manual_pkgs,
         entries=[_parse_entry(e) for e in d.get("entries", [])],
         post_package=_validate_str_list(d.get("post_package", []), f"component '{name}' post_package"),
         post_install=_validate_str_list(d.get("post_install", []), f"component '{name}' post_install"),

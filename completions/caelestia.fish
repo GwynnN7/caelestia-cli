@@ -133,8 +133,12 @@ complete -c caelestia -n "$seen resizer" -a 'active' -d 'Select the active windo
 complete -c caelestia -n "$seen install" -l 'aur-helper' -d 'The AUR helper to use' -a 'yay paru' -r
 complete -c caelestia -n "$seen install" -l 'enable-components' -d 'List of components to enable' -r
 complete -c caelestia -n "$seen install" -l 'disable-components' -d 'List of components to disable' -r
+complete -c caelestia -n "$seen install" -s 'a' -l 'ask-all' -d 'Prompt selection for all components'
+complete -c caelestia -n "$seen install" -s 'r' -l 'reinstall' -d 'Reinstall specific components without uninstalling others'
 complete -c caelestia -n "$seen install" -l 'noconfirm' -d 'Use defaults for all prompts'
 
 # Update
 complete -c caelestia -n "$seen update" -l 'aur-helper' -d 'The AUR helper to use' -a 'yay paru' -r
+complete -c caelestia -n "$seen update" -s 'g' -l 'git' -d 'Only update if the git commit has changed'
+complete -c caelestia -n "$seen update" -s 'f' -l 'force-dotfiles' -d 'Re-install all dotfiles regardless of changes'
 complete -c caelestia -n "$seen update" -l 'noconfirm' -d 'Use defaults for all prompts'

@@ -1,3 +1,4 @@
+import os
 import shutil
 import subprocess
 import tempfile
@@ -7,6 +8,19 @@ from caelestia.utils.paths import cache_dir, config_dir, data_dir, dots_dir, sta
 
 # Dirs to never prune even if empty
 _PROTECTED_DIRS = frozenset({Path.home(), config_dir, data_dir, state_dir, cache_dir})
+
+
+def needs_sudo(path: Path) -> bool:
+    """Whether creating, replacing or removing `path` requires root.
+
+    Used for paths the manifest no longer describes, where the entry's `sudo`
+    flag is no longer available to consult.
+    """
+
+    parent = path.parent
+    while not parent.exists() and parent != parent.parent:
+        parent = parent.parent
+    return not os.access(parent, os.W_OK)
 
 
 class Deployer:
@@ -47,11 +61,21 @@ class Deployer:
             self.remove(dest, sudo=sudo)
 
         if sudo:
-            subprocess.run(["sudo", "mkdir", "-p", str(dest.parent)], check=True)
-            subprocess.run(["sudo", "cp", str(src), str(dest)], check=True)
-            
-            # Optional: Ensure root owns the system configs
-            #subprocess.run(["sudo", "chown", "root:root", str(dest)], check=True)
+            # `install` sets the owner and mode explicitly: `cp` keeps whatever the
+            # existing dest had, so an upstream mode change (e.g. a script becoming
+            # executable) would never reach the deployed file. Writing a temp file
+            # first and renaming it keeps the replacement atomic, so an interrupted
+            # deploy can't leave a half written /etc/sudoers.d entry behind.
+            tmp = dest.parent / f".{dest.name}.caelestia-new"
+            mode = f"{src.stat().st_mode & 0o777:o}"
+            subprocess.run(
+                ["sudo", "install", "-D", "-o", "root", "-g", "root", "-m", mode, str(src), str(tmp)], check=True
+            )
+            try:
+                subprocess.run(["sudo", "mv", "-f", str(tmp), str(dest)], check=True)
+            except BaseException:
+                subprocess.run(["sudo", "rm", "-f", str(tmp)], check=False)
+                raise
         else:
             # Existing standard user deployment
             dest.parent.mkdir(parents=True, exist_ok=True)

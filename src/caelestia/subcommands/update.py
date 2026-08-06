@@ -1,3 +1,4 @@
+import subprocess
 import sys
 from argparse import Namespace
 from pathlib import Path
@@ -5,7 +6,7 @@ from pathlib import Path
 from caelestia.utils.dots.deployer import Deployer
 from caelestia.utils.dots.diff import Changeset
 from caelestia.utils.dots.manifest import ComponentError, Manifest, ManifestError
-from caelestia.utils.dots.misc import build_local_packages, build_manual_packages, run_hooks
+from caelestia.utils.dots.misc import build_local_packages, run_hooks
 from caelestia.utils.dots.packages import PackageError, PackageInstaller
 from caelestia.utils.dots.source import DotsSource, SourceError
 from caelestia.utils.dots.state import DotsState
@@ -26,6 +27,10 @@ class Command:
         if state.applied_rev is None:
             fatal("dots not installed yet. Run `caelestia install` first.")
 
+        # Captured before the manifest resolves, to tell apart components that are
+        # already set up from ones being enabled for the first time
+        previously_enabled = list(state.enabled_components)
+
         # Run system update
         try:
             installer = PackageInstaller.get(self.args.aur_helper or state.aur_helper, self.args.noconfirm)
@@ -42,6 +47,14 @@ class Command:
         if getattr(self.args, "force_dotfiles", False):
             print()
             log("Force re-installing all configs...")
+
+            # The working tree still sits at the applied rev, so without this the
+            # forced deploy would re-place the *old* files under the new rev
+            try:
+                source.checkout_tip()
+            except SourceError as e:
+                fatal(e)
+
             deployer = Deployer()
             for entry in entries:
                 src = source.working_path(entry.expanded_src())
@@ -49,6 +62,9 @@ class Command:
                     warn(f"missing in source, skipping: {entry.src}")
                     continue
                 dests = entry.expanded_dests()
+                if not dests:
+                    warn(f"dest glob matched nothing, skipping: {entry.dest}")
+                    continue
                 for dest in dests:
                     deployer.place(src, Path(dest), sudo=entry.sudo)
                     info(f"{entry.src} -> {dest}")
@@ -81,18 +97,16 @@ class Command:
             state.save()
             state.local_packages = self.sync_local_packages(installer, source, state.local_packages, desired_local)
             state.save()
-
-            desired_manual = []
-            for name in manifest.enabled_components:
-                desired_manual.extend(manifest.components[name].manual_packages)
-                
-            if desired_manual:
-                build_manual_packages(installer, desired_manual)
         except PackageError as e:
             fatal(e)
 
-        # Run hooks
-        run_hooks(manifest, "post_update")
+        # Run hooks. Components enabled for the first time have never been set up, so
+        # they go through the install path instead of being handed a plain update
+        new_components = [name for name in manifest.enabled_components if name not in previously_enabled]
+        if new_components:
+            info(f"Newly enabled components: {', '.join(new_components)}")
+            run_hooks(manifest, "post_install", new_components)
+        run_hooks(manifest, "post_update", [n for n in manifest.enabled_components if n not in new_components])
 
         # Mark the new revision applied
         state.applied_rev = tip
@@ -188,10 +202,22 @@ class Command:
             revived_files.append(new_path)
             warn(f"{dest} was removed but changed upstream; upstream version written as {new_path.name}")
 
+        failed = []
         for dest in changeset.deletes:
-            deployer.remove(dest, sudo=(dest in changeset.sudo_files))
+            try:
+                deployer.remove(dest, sudo=(dest in changeset.sudo_files))
+            except (OSError, subprocess.CalledProcessError) as e:
+                # Not worth aborting a whole update (and losing track of everything
+                # already placed) over one file that won't budge
+                warn(f"failed to remove {dest}: {e}")
+                failed.append(dest)
+                continue
             deployer.prune_empty_dirs(dest, Path.home())
             info(f"Removed {dest}")
+
+        # Leave failures in the deployed state so the next update retries them
+        for dest in failed:
+            changeset.deletes.remove(dest)
 
         return new_files, revived_files, deployer.deployed_files
 

@@ -1,10 +1,9 @@
-import os
 import shutil
 import textwrap
 from argparse import Namespace
 from pathlib import Path
 
-from caelestia.utils.dots.deployer import Deployer
+from caelestia.utils.dots.deployer import Deployer, needs_sudo
 from caelestia.utils.dots.legacy import (
     LEGACY_META_PKG,
     detect_legacy_repo,
@@ -13,7 +12,7 @@ from caelestia.utils.dots.legacy import (
     legacy_to_delete,
 )
 from caelestia.utils.dots.manifest import ComponentError, Manifest, ManifestError
-from caelestia.utils.dots.misc import build_local_packages, build_manual_packages, run_hooks
+from caelestia.utils.dots.misc import build_local_packages, run_hooks
 from caelestia.utils.dots.packages import DEFAULT_AUR_HELPER, PackageError, PackageInstaller
 from caelestia.utils.dots.source import DotsSource, SourceError
 from caelestia.utils.dots.state import DotsState
@@ -215,9 +214,8 @@ class Command:
 
                     path = Path(old_dest)
                     if path.exists() or path.is_symlink():
-                        use_sudo = not os.access(path.parent if path.parent.exists() else path, os.W_OK)
                         try:
-                            deployer.remove(path, sudo=use_sudo)
+                            deployer.remove(path, sudo=needs_sudo(path))
                             info(f"Deleted -> {old_dest}")
                         except Exception as e:
                             warn(f"Failed to remove orphaned file {old_dest}: {e}")
@@ -272,12 +270,6 @@ class Command:
             for local_dir, pkgs in old_state.local_packages.items():
                 if local_dir not in local_packages:
                     local_packages[local_dir] = pkgs
-
-        manual_pkgs = []
-        for name in manifest.enabled_components:
-            manual_pkgs.extend(manifest.components[name].manual_packages)
-        if manual_pkgs:
-            build_manual_packages(installer, manual_pkgs)
 
         return installer, packages, local_packages
 

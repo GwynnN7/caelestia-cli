@@ -1,6 +1,8 @@
+import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
-import subprocess
+
+from caelestia.utils.dots.deployer import needs_sudo
 from caelestia.utils.dots.manifest import ManifestEntry
 from caelestia.utils.dots.source import DotsSource, SourceError
 from caelestia.utils.io import warn
@@ -104,6 +106,11 @@ class Changeset:
                         # Gone from disk and no entry manages it
                         untracked.append(dest_path)
                         continue
+
+                    # No entry left to read the sudo flag off, so go by the filesystem;
+                    # without this, root owned files would be read and removed as the user
+                    if needs_sudo(dest_path):
+                        sudo_files.add(dest_path)
 
                     local = _read_local(dest_path, sudo=(dest_path in sudo_files))
                     if local is not None and has_base and try_read(applied_rev, src) == local:
