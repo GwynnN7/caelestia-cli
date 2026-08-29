@@ -268,7 +268,7 @@ def sync_papirus_colors(hex_color: str) -> None:
 
     try:
         subprocess.Popen(
-            ["sudo", "-n", "papirus-folders", "-C", color, "-u"],
+            ["papirus-folders", "-C", color, "-u"],
             stderr=subprocess.DEVNULL,
             stdout=subprocess.DEVNULL,
             start_new_session=True,
