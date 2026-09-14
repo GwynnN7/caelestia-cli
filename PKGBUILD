@@ -10,8 +10,8 @@ depends=('python' 'python-pillow' 'python-materialyoucolor' 'libnotify' 'swappy'
          'wl-clipboard' 'slurp' 'gpu-screen-recorder' 'dconf' 'cliphist' 'fuzzel')
 optdepends=('caelestia-shell: shell control and screenshot function')
 makedepends=('python-build' 'python-installer' 'python-hatch' 'python-hatch-vcs')
-provides=($_pkgname)
-conflicts=($_pkgname)
+provides=($_pkgname, 'midnight-cli', 'midnight-cli-git')
+conflicts=($_pkgname, 'midnight-cli', 'midnight-cli-git')
 source=("$pkgname::git+$url.git")
 sha256sums=('SKIP')
 
