@@ -1,6 +1,6 @@
-# caelestia-cli
+# MiDnight cli
 
-The main control script for the Caelestia dotfiles.
+The main control script for the MiDnight dotfiles.
 
 <details><summary id="dependencies">External dependencies</summary>
 
@@ -21,19 +21,30 @@ The main control script for the Caelestia dotfiles.
 
 ### Arch linux
 
-The CLI is available from the AUR as `caelestia-cli`. You can install it with an AUR helper
-like [`yay`](https://github.com/Jguer/yay) or manually downloading the PKGBUILD and running `makepkg -si`.
+This CLI is avaiable from the AUR as `midnight-cli-git`.
+You can install it with an AUR helper like [`yay`](https://github.com/Jguer/yay) or manually downloading the PKGBUILD and running `makepkg -si`
+```sh
+yay -S midnight-cli-git
+```
+This CLI can also be installed (and primarily meant to) using `pkgit` package manager (available on the AUR as `pkgit-git`
+```sh
+pkgit -i https://github.com/dim-ghub/midnight-cli
+```
 
-A package following the latest commit also exists as `caelestia-cli-git`. This is bleeding edge
-and likely to be unstable/have bugs. Regular users are recommended to use the stable package
-(`caelestia-cli`).
+> [!TIP]
+> You can also use `pkgit -qi https://github.com/dim-ghub/midnight-cli` for a quiet installation.
+
+> [!NOTE]
+> To opt out of pkgit shell management when building or managing the shell manually, create the marker file: `~/.local/state/caelestia/shell-managed`.
 
 ### Nix
+> [!WARNING]
+> This repository has limited/no support for **NixOS**! Proceed at your own risk.
 
 You can run the CLI directly via `nix run`:
 
 ```sh
-nix run github:caelestia-dots/cli
+nix run github:dim-ghub/midnight-cli
 ```
 
 Or add it to your system configuration:
@@ -43,15 +54,15 @@ Or add it to your system configuration:
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
 
-    caelestia-cli = {
-      url = "github:caelestia-dots/cli";
+    midnight-cli = {
+      url = "github:dim-ghub/midnight-cli";
       inputs.nixpkgs.follows = "nixpkgs";
     };
   };
 }
 ```
 
-The package is available as `caelestia-cli.packages.<system>.default`, which can be added to your
+The package is available as `midnight-cli.packages.<system>.default`, which can be added to your
 `environment.systemPackages`, `users.users.<username>.packages`, `home.packages` if using home-manager,
 or a devshell. The CLI can then be used via the `caelestia` command.
 
@@ -60,10 +71,7 @@ or a devshell. The CLI can then be used via the `caelestia` command.
 > To enable the shell, use the `with-shell` package. This is the recommended installation method, as
 > the CLI exposes the shell via the `shell` subcommand, meaning there is no need for the shell package
 > to be exposed.
-
-For home-manager, you can also use the Caelestia's home manager module (explained in
-[configuring](https://github.com/caelestia-dots/shell?tab=readme-ov-file#home-manager-module)) that
-installs and configures the shell and the CLI.
+For home-manager, you can also use the MiDnight's home manager module.
 
 ### Manual installation
 
@@ -80,7 +88,7 @@ yay -S libnotify swappy grim dart-sass wl-clipboard slurp gpu-screen-recorder gl
 ```
 
 Now, clone the repo, `cd` into it, build the wheel via `python -m build --wheel`
-and install it via `python -m installer dist/*.whl`. Then, to install the `fish`
+and install it via `python -m installer --overwrite-existing dist/*.whl`. Then, to install the `fish`
 completions, copy the `completions/caelestia.fish` file to
 `/usr/share/fish/vendor_completions.d/caelestia.fish`.
 
@@ -88,7 +96,7 @@ completions, copy the `completions/caelestia.fish` file to
 git clone https://github.com/caelestia-dots/cli.git
 cd cli
 python -m build --wheel
-sudo python -m installer dist/*.whl
+sudo python -m installer --overwrite-existing dist/*.whl
 sudo cp completions/caelestia.fish /usr/share/fish/vendor_completions.d/caelestia.fish
 ```
 
@@ -152,6 +160,7 @@ subcommands:
     shell        start or message the shell
     toggle       toggle a special workspace
     scheme       manage the colour scheme
+    search       search using a screen region
     screenshot   take a screenshot
     record       start a screen recording
     clipboard    open clipboard history
@@ -191,7 +200,15 @@ All configuration options are in `~/.config/caelestia/cli.json`.
 
 ```json
 {
+    "screenshot": {
+        "app": "swappy",
+        "action": "edit",
+        "regionAction": "edit",
+        "fullscreenAction": "notify",
+        "copyOnSave": true
+    },
     "record": {
+        "refreshRate": 60,
         "extraArgs": []
     },
     "wallpaper": {
@@ -269,3 +286,10 @@ All configuration options are in `~/.config/caelestia/cli.json`.
 ```
 
 </details>
+
+- `screenshot.app` sets the application/command template to open screenshots with (e.g. `"swappy"`, `"satty --filename {}"`, `"tensaku --filename <FILENAME>"`). Can be overridden with `caelestia screenshot -a/--app <app>`.
+- `screenshot.action` sets the default screenshot action (`"edit"`, `"save"`, `"copy"`, `"notify"`). Can be overridden per invocation with flags `-s`/`--save`, `-c`/`--copy`, `-e`/`--edit`, `-n`/`--notify`, or `--action <action>`.
+- `screenshot.regionAction` sets the action specifically for region screenshots (defaults to `"edit"`).
+- `screenshot.fullscreenAction` sets the action specifically for fullscreen screenshots (defaults to `"notify"`).
+- `screenshot.copyOnSave` (boolean, default: `true`) controls whether saving a screenshot also copies it to the clipboard.
+- `record.refreshRate` sets the recording frame rate. When omitted or `null`, the focused monitor's refresh rate is used. It can also be overridden per invocation with `caelestia record --fps <rate>`.

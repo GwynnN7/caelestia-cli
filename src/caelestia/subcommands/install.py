@@ -1,4 +1,5 @@
 import shutil
+import subprocess
 import textwrap
 from argparse import Namespace
 from pathlib import Path
@@ -21,7 +22,7 @@ from caelestia.utils.paths import (
     config_backup_dir,
     config_dir,
 )
-
+from caelestia.utils.shell import detect_shell_management_source, shell_package_matching_cli
 
 def _parse_list_arg(value: str | None) -> list[str] | None:
     if value is None:
@@ -40,6 +41,54 @@ def _deref_symlink(link: Path, target: Path) -> None:
         bak.rename(link)
         raise
     bak.unlink()
+
+
+def _install_shell_with_pkgit(installer: PackageInstaller, noconfirm: bool) -> None:
+    """Install Caelestia Shell via pkgit, with fallback support for external package managers.
+
+    This function handles shell installation with the following priority:
+    1. If CLI was installed via AUR (primary)
+    2. If shell is managed by pacman (AUR)
+    3. Manual-install marker
+    4. Otherwise attempt pkgit if present; else skip.
+    """
+    print()
+    log("Installing Caelestia Shell...")
+
+    src = detect_shell_management_source(installer)
+
+    if src == "shell":
+        info("Shell package already installed - nothing to do")
+        return
+
+    if src == "manual":
+        info("Manual shell marker present - skipping pkgit")
+        return
+
+    if src == "cli":
+        pkg = shell_package_matching_cli(installer)
+        try:
+            info(f"CLI was installed via AUR - installing shell via the same source ({pkg})...")
+            installer.install([pkg])
+            info(f"Caelestia Shell installed via {pkg}")
+            return
+        except PackageError as e:
+            warn(f"Failed to install {pkg} via the system package manager: {e}")
+            info("Falling back to pkgit")
+
+    if shutil.which("pkgit") is None:
+        info("pkgit not found - shell will load from system paths directly")
+        info("To enable pkgit package management, install pkgit-git from AUR:")
+        info("  yay -S pkgit-git")
+        return
+
+    cmd = ["pkgit", "-qi" if noconfirm else "-i", "https://github.com/dim-ghub/caelestia-shell"]
+    try:
+        subprocess.run(cmd, check=True)
+        info("Caelestia Shell installed successfully via pkgit")
+    except subprocess.CalledProcessError as e:
+        warn(f"Failed to install Caelestia Shell via pkgit: {e}")
+        info("The shell will still function from system paths")
 
 
 class Command:
@@ -69,6 +118,9 @@ class Command:
 
         deployed = self.deploy_configs(source, manifest, old_state)
         run_hooks(manifest, "post_install")
+
+        # Install shell with intelligent detection of existing installations
+        _install_shell_with_pkgit(installer, self.args.noconfirm)
 
         final_components = manifest.enabled_components
         if getattr(self.args, "reinstall", False) and old_state and old_state.enabled_components:

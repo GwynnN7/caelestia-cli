@@ -9,6 +9,7 @@ from caelestia.subcommands import (
     resizer,
     scheme,
     screenshot,
+    search,
     shell,
     toggle,
     update,
@@ -74,11 +75,38 @@ def parse_args() -> tuple[argparse.ArgumentParser, argparse.Namespace]:
     set_parser.add_argument("-m", "--mode", choices=["dark", "light"], help="the mode to switch to")
     set_parser.add_argument("-v", "--variant", choices=scheme_variants, help="the variant to switch to")
 
-    # Screenshot
+    # Create parser for search opts
+    search_parser = command_parser.add_parser("search", help="search using a screen region")
+    search_parser.set_defaults(cls=search.Command)
+
+    # Create parser for screenshot opts
     screenshot_parser = command_parser.add_parser("screenshot", help="take a screenshot")
     screenshot_parser.set_defaults(cls=screenshot.Command)
     screenshot_parser.add_argument("-r", "--region", nargs="?", const="slurp", help="take a screenshot of a region")
-    screenshot_parser.add_argument("-f", "--freeze", action="store_true", help="freeze the screen while selecting a region")
+    screenshot_parser.add_argument(
+        "-f", "--freeze", action="store_true", help="freeze the screen while selecting a region"
+    )
+    screenshot_parser.add_argument(
+        "-c", "--copy", "--clipboard", action="store_true", help="copy screenshot to clipboard without opening an app"
+    )
+    screenshot_parser.add_argument(
+        "-s", "--save", action="store_true", help="save screenshot to disk without opening an app"
+    )
+    screenshot_parser.add_argument(
+        "-e", "--edit", "--open", action="store_true", help="open screenshot in editor application"
+    )
+    screenshot_parser.add_argument(
+        "-n", "--notify", action="store_true", help="show notification with open/save actions"
+    )
+    screenshot_parser.add_argument(
+        "-a", "--app", metavar="APP", help="application command/template to open screenshot with"
+    )
+    screenshot_parser.add_argument(
+        "--action",
+        choices=["edit", "open", "save", "copy", "clipboard", "notify"],
+        help="action to perform on screenshot",
+    )
+    screenshot_parser.add_argument("-F", "--file", help="path to an existing screenshot image to process")
 
     # Record
     record_parser = command_parser.add_parser("record", help="start a screen recording")
@@ -87,6 +115,9 @@ def parse_args() -> tuple[argparse.ArgumentParser, argparse.Namespace]:
     record_parser.add_argument("-s", "--sound", action="store_true", help="record audio")
     record_parser.add_argument("-p", "--pause", action="store_true", help="pause/resume the recording")
     record_parser.add_argument("-c", "--clipboard", action="store_true", help="copy recording path to clipboard")
+    record_parser.add_argument(
+        "-f", "--fps", type=int, help="the recording frame rate (defaults to the monitor's refresh rate)"
+    )
 
     # Clipboard
     clipboard_parser = command_parser.add_parser("clipboard", help="open clipboard history")
@@ -106,8 +137,23 @@ def parse_args() -> tuple[argparse.ArgumentParser, argparse.Namespace]:
     wallpaper_parser.add_argument("-r", "--random", nargs="?", const=wallpapers_dir, metavar="DIR", help="switch random")
     wallpaper_parser.add_argument("-f", "--file", help="the path to the wallpaper to switch to")
     wallpaper_parser.add_argument("-n", "--no-filter", action="store_true", help="do not filter by size")
-    wallpaper_parser.add_argument("-t", "--threshold", default=0.8, help="minimum percentage size threshold")
-    wallpaper_parser.add_argument("-N", "--no-smart", action="store_true", help="do not auto-change scheme mode")
+    wallpaper_parser.add_argument(
+        "-t",
+        "--threshold",
+        default=0.8,
+        help="the minimum percentage of the largest monitor size the image must be greater than to be selected",
+    )
+    wallpaper_parser.add_argument(
+        "-N",
+        "--no-smart",
+        action="store_true",
+        help="do not automatically change the scheme mode based on wallpaper colour",
+    )
+    wallpaper_parser.add_argument(
+        "--extract-thumbs",
+        action="store_true",
+        help="extract thumbnails for all videos in wallpapers directory",
+    )
 
     # Resizer
     resizer_parser = command_parser.add_parser("resizer", help="window resizer daemon")
